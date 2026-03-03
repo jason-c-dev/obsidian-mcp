@@ -96,7 +96,7 @@ Create the file if it doesn't exist. `PATH` must include the directory containin
 
 ## Tools
 
-15 tools are available. All accept an optional `vault` parameter for multi-vault setups. If omitted, the default vault is used (set via `OBSIDIAN_VAULT` env var, or the CLI's own default if unset).
+16 tools are available. All accept an optional `vault` parameter for multi-vault setups. If omitted, the default vault is used (set via `OBSIDIAN_VAULT` env var, or the CLI's own default if unset).
 
 ### Read
 
@@ -121,6 +121,7 @@ Create the file if it doesn't exist. `PATH` must include the directory containin
 | `vault_daily_append` | Append content to today's daily note |
 | `vault_property_set` | Set a YAML frontmatter property. Supports `type` (text, list, number, etc.) |
 | `vault_move` | Move or rename a note |
+| `vault_attachment` | Write a binary file (image, PDF, etc.) into the vault. Returns embed syntax `![[filename]]` |
 
 ### Vault
 
@@ -174,6 +175,22 @@ You don't need all skills in every project. Pick what's relevant:
 - **Minimal** — just `capture` and `today` for quick vault interaction
 - **Standard** — add `note`, `find`, `log` for full read/write
 - **Full** — all 8 skills for complete vault management from any project
+
+## Attachments
+
+The `vault_attachment` tool handles binary files (images, PDFs, receipts, etc.) that can't be created through the text-based CLI. It writes files directly to the vault's filesystem — Obsidian's file watcher picks them up automatically.
+
+**Parameters:**
+- `name` — filename with extension (e.g. `receipt-2026-03-02.png`)
+- `data` — base64-encoded file contents
+- `folder` — subfolder within vault (default: `attachments`)
+
+**Example workflow** (e.g. from a Telegram bot):
+1. User sends a photo of a receipt with "Add this to expenses"
+2. Claude calls `vault_attachment` with the base64-encoded image → returns `receipt.png`
+3. Claude calls `vault_append` on an Expenses note with `![[receipt.png]]` to embed it
+
+If a file with the same name already exists, a timestamp is appended to avoid overwriting. Max file size is 10 MB.
 
 ## Multi-Vault
 

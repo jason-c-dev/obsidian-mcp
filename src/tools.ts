@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { obsidian } from "./obsidian.js";
+import { obsidian, writeAttachment } from "./obsidian.js";
 
 const Vault = z.string().optional().describe("Target vault name. Omit to use the default vault.");
 
@@ -237,6 +237,23 @@ export function registerTools(server: McpServer) {
     async ({ file, to, vault }) => {
       const result = obsidian("move", [`file=${file}`, `to=${to}`], vault);
       return { content: [{ type: "text", text: result || `Moved ${file} to ${to}` }] };
+    },
+  );
+
+  server.tool(
+    "vault_attachment",
+    "Write a binary file (image, PDF, etc.) into the vault as an attachment. Returns the filename for use in note embeds with ![[filename]].",
+    {
+      name: z.string().describe("Filename with extension (e.g. receipt-2026-03-02.png)"),
+      data: z.string().describe("Base64-encoded file contents"),
+      folder: z.string().optional().describe("Subfolder within vault to store in (default: attachments)"),
+      vault: Vault,
+    },
+    async ({ name, data, folder, vault }) => {
+      const finalName = writeAttachment(name, data, folder, vault);
+      return {
+        content: [{ type: "text", text: `Saved attachment: ${finalName}\nEmbed in notes with: ![[${finalName}]]` }],
+      };
     },
   );
 }

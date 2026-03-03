@@ -4,3 +4,4 @@ build/
 # Personal config — not part of the generic server
 CLAUDE.md
 .claude/
+.DS_Store
