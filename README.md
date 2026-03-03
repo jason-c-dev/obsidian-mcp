@@ -28,13 +28,20 @@ This compiles TypeScript from `src/` into `build/`.
 Register the server globally so every Claude Code session has vault access:
 
 ```bash
-claude mcp add --transport stdio -s user obsidian -- node /path/to/obsidian-mcp-server/build/index.js
+claude mcp add --transport stdio -s user obsidian \
+  -e PATH="$(dirname $(which obsidian)):/usr/local/bin:/usr/bin:/bin" \
+  -- node /path/to/obsidian-mcp-server/build/index.js
 ```
 
-If you have multiple vaults or want to target a specific one, set the `OBSIDIAN_VAULT` environment variable:
+The `PATH` env is required because the MCP server spawns as a child process with a minimal system PATH that won't include the Obsidian CLI location. Find yours with `which obsidian` and include the directory containing it.
+
+To also target a specific vault, add `OBSIDIAN_VAULT`:
 
 ```bash
-claude mcp add --transport stdio -s user obsidian -e OBSIDIAN_VAULT="my vault name" -- node /path/to/obsidian-mcp-server/build/index.js
+claude mcp add --transport stdio -s user obsidian \
+  -e PATH="$(dirname $(which obsidian)):/usr/local/bin:/usr/bin:/bin" \
+  -e OBSIDIAN_VAULT="my vault name" \
+  -- node /path/to/obsidian-mcp-server/build/index.js
 ```
 
 This writes to `~/.claude.json`:
@@ -47,6 +54,7 @@ This writes to `~/.claude.json`:
       "command": "node",
       "args": ["/path/to/obsidian-mcp-server/build/index.js"],
       "env": {
+        "PATH": "/Applications/Obsidian.app/Contents/MacOS:/usr/local/bin:/usr/bin:/bin",
         "OBSIDIAN_VAULT": "my vault name"
       }
     }
@@ -54,7 +62,8 @@ This writes to `~/.claude.json`:
 }
 ```
 
-If `OBSIDIAN_VAULT` is not set, the CLI uses its own default (typically the only vault, or the last active one).
+- **`PATH`** — must include the directory containing the `obsidian` binary. On macOS this is typically `/Applications/Obsidian.app/Contents/MacOS`.
+- **`OBSIDIAN_VAULT`** — optional. If not set, the CLI uses its own default (typically the only vault, or the last active one).
 
 To verify it's working, start Claude Code in any project and look for the obsidian tools (they'll appear as MCP tools like `vault_read`, `vault_search`, etc.).
 
@@ -75,6 +84,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/obsidian-mcp-server/build/index.js"],
       "env": {
+        "PATH": "/Applications/Obsidian.app/Contents/MacOS:/usr/local/bin:/usr/bin:/bin",
         "OBSIDIAN_VAULT": "my vault name"
       }
     }
@@ -82,7 +92,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-Create the file if it doesn't exist. Omit the `env` block if you only have one vault. Restart Claude Desktop after editing.
+Create the file if it doesn't exist. `PATH` must include the directory containing the `obsidian` binary (find it with `which obsidian`). `OBSIDIAN_VAULT` is optional if you only have one vault. Restart Claude Desktop after editing.
 
 ## Tools
 
@@ -209,7 +219,7 @@ The server uses stdio transport (JSON-RPC over stdin/stdout). `console.error()` 
 
 **Skills not appearing**: Make sure the SKILL.md files are in the project's `.claude/skills/<name>/SKILL.md` directory structure. Claude Code auto-discovers skills from `.claude/skills/`.
 
-**"obsidian: command not found"**: The Obsidian CLI must be on your PATH. Verify with `which obsidian`.
+**"ENOENT" or "obsidian: command not found"**: The MCP server can't find the `obsidian` binary. This is the most common setup issue — the server runs as a child process with a minimal PATH. Fix: ensure your MCP server registration includes `PATH` in the `env` block with the directory containing the `obsidian` binary. Find it with `which obsidian` (on macOS it's typically `/Applications/Obsidian.app/Contents/MacOS`). See the Configure section above.
 
 **CLI commands failing**: Obsidian must be running. The CLI communicates with the Obsidian app — if it's closed, all commands fail.
 
