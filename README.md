@@ -2,13 +2,12 @@
 
 An MCP (Model Context Protocol) server that exposes your Obsidian vault as tools for Claude. This lets any Claude session — Claude Code, Claude Desktop, `claude -p` scripts — read, write, search, and manage your vault.
 
-It's a thin wrapper over the [Obsidian CLI](https://github.com/Obsidian-OS/obsidian-cli). No state lives in the server; everything is in the vault.
+It operates directly on vault files via Node.js `fs` — no Obsidian app, CLI, or plugins required. An Obsidian vault is just a folder of markdown files, and this server works with that directly.
 
 ## Prerequisites
 
-- [Obsidian](https://obsidian.md/) installed and running
-- [Obsidian CLI](https://github.com/Obsidian-OS/obsidian-cli) installed and on your PATH (`obsidian` command available)
 - Node.js 18+
+- An Obsidian-compatible vault (any folder of markdown files)
 
 ## Install
 
@@ -29,18 +28,7 @@ Register the server globally so every Claude Code session has vault access:
 
 ```bash
 claude mcp add --transport stdio -s user obsidian \
-  -e PATH="$(dirname $(which obsidian)):/usr/local/bin:/usr/bin:/bin" \
-  -- node /path/to/obsidian-mcp-server/build/index.js
-```
-
-The `PATH` env is required because the MCP server spawns as a child process with a minimal system PATH that won't include the Obsidian CLI location. Find yours with `which obsidian` and include the directory containing it.
-
-To also target a specific vault, add `OBSIDIAN_VAULT`:
-
-```bash
-claude mcp add --transport stdio -s user obsidian \
-  -e PATH="$(dirname $(which obsidian)):/usr/local/bin:/usr/bin:/bin" \
-  -e OBSIDIAN_VAULT="my vault name" \
+  -e OBSIDIAN_VAULT="/path/to/your/vault" \
   -- node /path/to/obsidian-mcp-server/build/index.js
 ```
 
@@ -54,16 +42,14 @@ This writes to `~/.claude.json`:
       "command": "node",
       "args": ["/path/to/obsidian-mcp-server/build/index.js"],
       "env": {
-        "PATH": "/Applications/Obsidian.app/Contents/MacOS:/usr/local/bin:/usr/bin:/bin",
-        "OBSIDIAN_VAULT": "my vault name"
+        "OBSIDIAN_VAULT": "/path/to/your/vault"
       }
     }
   }
 }
 ```
 
-- **`PATH`** — must include the directory containing the `obsidian` binary. On macOS this is typically `/Applications/Obsidian.app/Contents/MacOS`.
-- **`OBSIDIAN_VAULT`** — optional. If not set, the CLI uses its own default (typically the only vault, or the last active one).
+- **`OBSIDIAN_VAULT`** — path to your vault folder. If not set, the server looks for vaults in Obsidian's config (`~/.config/obsidian/obsidian.json` on Linux, `~/Library/Application Support/obsidian/obsidian.json` on macOS).
 
 To verify it's working, start Claude Code in any project and look for the obsidian tools (they'll appear as MCP tools like `vault_read`, `vault_search`, etc.).
 
@@ -84,19 +70,18 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
       "command": "node",
       "args": ["/path/to/obsidian-mcp-server/build/index.js"],
       "env": {
-        "PATH": "/Applications/Obsidian.app/Contents/MacOS:/usr/local/bin:/usr/bin:/bin",
-        "OBSIDIAN_VAULT": "my vault name"
+        "OBSIDIAN_VAULT": "/path/to/your/vault"
       }
     }
   }
 }
 ```
 
-Create the file if it doesn't exist. `PATH` must include the directory containing the `obsidian` binary (find it with `which obsidian`). `OBSIDIAN_VAULT` is optional if you only have one vault. Restart Claude Desktop after editing.
+Create the file if it doesn't exist. Restart Claude Desktop after editing.
 
 ## Tools
 
-16 tools are available. All accept an optional `vault` parameter for multi-vault setups. If omitted, the default vault is used (set via `OBSIDIAN_VAULT` env var, or the CLI's own default if unset).
+16 tools are available. All accept an optional `vault` parameter for multi-vault setups. If omitted, the default vault is used (set via `OBSIDIAN_VAULT` env var).
 
 ### Read
 
@@ -137,8 +122,6 @@ The MCP server gives Claude the raw tools, but tools alone don't tell Claude *wh
 
 These skills are written to use the MCP tools (`vault_read`, `vault_create`, etc.). Copy them into any project where you want Claude to interact with your vault.
 
-If you also work on this repo directly and want skills that call the `obsidian` CLI via Bash instead, you can create CLI-flavored equivalents in your local `.claude/skills/` directory (not tracked by git).
-
 | Skill | Command | What it does |
 |-------|---------|-------------|
 | `capture` | `/capture <thought>` | Quick-capture a thought to today's daily note with timestamp |
@@ -178,7 +161,7 @@ You don't need all skills in every project. Pick what's relevant:
 
 ## Attachments
 
-The `vault_attachment` tool handles binary files (images, PDFs, receipts, etc.) that can't be created through the text-based CLI. It writes files directly to the vault's filesystem — Obsidian's file watcher picks them up automatically.
+The `vault_attachment` tool handles binary files (images, PDFs, receipts, etc.) by writing them directly to the vault's filesystem. Obsidian's file watcher picks them up automatically.
 
 **Parameters:**
 - `name` — filename with extension (e.g. `receipt-2026-03-02.png`)
@@ -194,7 +177,7 @@ If a file with the same name already exists, a timestamp is appended to avoid ov
 
 ## Multi-Vault
 
-The server defaults to the vault specified by `OBSIDIAN_VAULT` env var. If unset, the CLI uses its own default. To target a different vault per-call, pass the `vault` parameter:
+The server defaults to the vault specified by `OBSIDIAN_VAULT` env var. If unset, it reads Obsidian's config file to discover known vaults. To target a different vault per-call, pass the `vault` parameter:
 
 ```
 vault_read(file="My Note", vault="Work Vault")
@@ -215,7 +198,7 @@ The server uses stdio transport (JSON-RPC over stdin/stdout). `console.error()` 
 ├── src/
 │   ├── index.ts              # Server entry point — McpServer + stdio transport
 │   ├── tools.ts              # 15 MCP tool definitions with Zod schemas
-│   └── obsidian.ts           # CLI wrapper — execFileSync (no shell injection)
+│   └── obsidian.ts           # Vault engine — direct filesystem operations
 ├── build/                    # Compiled JS (generated by npm run build)
 ├── skills/                   # MCP skills — copy these into other projects
 │   ├── capture/SKILL.md
@@ -236,8 +219,10 @@ The server uses stdio transport (JSON-RPC over stdin/stdout). `console.error()` 
 
 **Skills not appearing**: Make sure the SKILL.md files are in the project's `.claude/skills/<name>/SKILL.md` directory structure. Claude Code auto-discovers skills from `.claude/skills/`.
 
-**"ENOENT" or "obsidian: command not found"**: The MCP server can't find the `obsidian` binary. This is the most common setup issue — the server runs as a child process with a minimal PATH. Fix: ensure your MCP server registration includes `PATH` in the `env` block with the directory containing the `obsidian` binary. Find it with `which obsidian` (on macOS it's typically `/Applications/Obsidian.app/Contents/MacOS`). See the Configure section above.
+**"Vault not found" or "ENOENT" errors**: Check that `OBSIDIAN_VAULT` points to a valid directory. The value should be the vault's folder path (e.g. `/Users/you/Documents/My Vault`). Verify with `ls "$OBSIDIAN_VAULT"`.
 
-**CLI commands failing**: Obsidian must be running. The CLI communicates with the Obsidian app — if it's closed, all commands fail.
+**File permission errors**: The server needs read/write access to the vault directory. Check ownership and permissions on the vault folder.
+
+**Changes not appearing in Obsidian**: The server writes directly to the filesystem. Obsidian's file watcher typically picks up changes within 1-2 seconds. If not, try switching to another note and back, or restarting Obsidian.
 
 **Rebuild after changes**: If you edit source files, run `npm run build`. Claude Code loads the compiled JS from `build/`.
