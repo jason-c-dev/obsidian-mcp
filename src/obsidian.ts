@@ -176,7 +176,7 @@ export function vaultSearch(
   const vault = getVaultPath();
   const allFiles = walkMd(vault);
   const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
-  const results: unknown[] = [];
+  const scored: { entry: unknown; score: number }[] = [];
 
   for (const f of allFiles) {
     const content = readFileSync(f, "utf-8");
@@ -184,6 +184,15 @@ export function vaultSearch(
     if (!queryTerms.every((term) => lowerContent.includes(term))) continue;
 
     const relPath = relative(vault, f);
+
+    // Score by term frequency, with 2x weight for filename matches
+    let score = 0;
+    const lowerName = relPath.toLowerCase();
+    for (const term of queryTerms) {
+      if (lowerName.includes(term)) score += 2;
+      let idx = -1;
+      while ((idx = lowerContent.indexOf(term, idx + 1)) !== -1) score++;
+    }
 
     if (context) {
       const lines = content.split("\n");
@@ -199,13 +208,14 @@ export function vaultSearch(
           });
         }
       }
-      results.push({ file: relPath, matches });
+      scored.push({ entry: { file: relPath, matches, score }, score });
     } else {
-      results.push({ file: relPath });
+      scored.push({ entry: { file: relPath, score }, score });
     }
-
-    if (limit && results.length >= limit) break;
   }
+
+  scored.sort((a, b) => b.score - a.score);
+  const results = scored.slice(0, limit || scored.length).map((s) => s.entry);
 
   return JSON.stringify(results);
 }
