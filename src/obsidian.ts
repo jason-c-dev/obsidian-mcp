@@ -175,12 +175,13 @@ export function vaultSearch(
 ): string {
   const vault = getVaultPath();
   const allFiles = walkMd(vault);
-  const lowerQuery = query.toLowerCase();
+  const queryTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
   const results: unknown[] = [];
 
   for (const f of allFiles) {
     const content = readFileSync(f, "utf-8");
-    if (!content.toLowerCase().includes(lowerQuery)) continue;
+    const lowerContent = content.toLowerCase();
+    if (!queryTerms.every((term) => lowerContent.includes(term))) continue;
 
     const relPath = relative(vault, f);
 
@@ -188,7 +189,7 @@ export function vaultSearch(
       const lines = content.split("\n");
       const matches: { line: number; text: string; context: string[] }[] = [];
       for (let i = 0; i < lines.length; i++) {
-        if (lines[i].toLowerCase().includes(lowerQuery)) {
+        if (queryTerms.some((term) => lines[i].toLowerCase().includes(term))) {
           const start = Math.max(0, i - 2);
           const end = Math.min(lines.length, i + 3);
           matches.push({
