@@ -1,5 +1,7 @@
 # Obsidian MCP Server
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 An MCP (Model Context Protocol) server that exposes your Obsidian vault as tools for Claude. This lets any Claude session — Claude Code, Claude Desktop, `claude -p` scripts — read, write, search, and manage your vault.
 
 It operates directly on vault files via Node.js `fs` — no Obsidian app, CLI, or plugins required. An Obsidian vault is just a folder of markdown files, and this server works with that directly.
@@ -226,3 +228,7 @@ The server uses stdio transport (JSON-RPC over stdin/stdout). `console.error()` 
 **Changes not appearing in Obsidian**: The server writes directly to the filesystem. Obsidian's file watcher typically picks up changes within 1-2 seconds. If not, try switching to another note and back, or restarting Obsidian.
 
 **Rebuild after changes**: If you edit source files, run `npm run build`. Claude Code loads the compiled JS from `build/`.
+
+## License
+
+[MIT](LICENSE)
